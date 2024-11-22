@@ -48,31 +48,33 @@ local function ts_calloc(_: usize, _: usize): pointer <cimport, nodecl> end
 local function ts_realloc(_: pointer, _: usize): pointer <cimport, nodecl> end
 local function ts_free(_: pointer): void <cimport, nodecl> end
 
-global embedded_general_allocator = @record{}
+local allocator = @record{}
 
-function embedded_general_allocator:alloc(size: usize): pointer <inline>
+function allocator:alloc(size: usize): pointer <inline>
   if unlikely(size == 0) then return nilptr end
   return ts_malloc(size)
 end
 
-function embedded_general_allocator:alloc0(size: usize): pointer <inline>
+function allocator:alloc0(size: usize): pointer <inline>
   if unlikely(size == 0) then return nilptr end
   return ts_calloc(size, 1)
 end
 
-function embedded_general_allocator:realloc(p: pointer, nsize: usize, osize: usize): pointer <inline>
-  if unlikely(newsize == 0) then
-    if likely(p ~= nilptr) then
-      free(p)
-    end
-    return nilptr
-  elseif unlikely(newsize == oldsize) then
-    return p
-  end
-  return realloc(p, newsize)
+function allocator:dealloc(p: pointer): void <inline>
+  if unlikely(p == nilptr) then return end
+  ts_free(p)
 end
 
-function embedded_general_allocator:dealloc(p: pointer): void <inline>
-  if unlikely(p == nilptr) then return end
-  free(p)
+function allocator:realloc(p: pointer, nsize: usize, osize: usize): pointer <inline>
+  if unlikely(nsize == 0) then
+    if likely(p ~= nilptr) then
+      ts_free(p)
+    end
+    return nilptr
+  elseif unlikely(nsize == osize) then
+    return p
+  end
+  return ts_realloc(p, nsize)
 end
+
+global embedded_general_allocator = allocator{}
